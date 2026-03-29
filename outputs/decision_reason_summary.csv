@@ -1,0 +1,16 @@
+workflow,decision,decision_reason,transaction_count,fraud_count,fraud_rate
+rule_workflow,APPROVE,No material risk flags under current policy,278338,135,0.00048502180801759015
+rule_workflow,REVIEW,Strong anomaly pattern requires analyst review,842,67,0.07957244655581948
+rule_workflow,REVIEW,Extreme feature movement requires analyst review,3664,40,0.010917030567685589
+rule_workflow,REVIEW,Elevated amount paired with moderate anomaly pattern,712,24,0.033707865168539325
+rule_workflow,REVIEW,Off-hours transaction with elevated anomaly pattern,148,7,0.0472972972972973
+rule_workflow,REVIEW,High-value off-hours transaction,425,3,0.007058823529411765
+rule_workflow,REJECT,Very high anomaly intensity,326,148,0.4539877300613497
+rule_workflow,REJECT,Extreme anomaly stack with multiple severe signals,352,68,0.19318181818181818
+score_workflow,APPROVE,Score remained below review threshold,276229,102,0.0003692588395859957
+score_workflow,REVIEW,Risk score crossed review threshold,5342,76,0.01422688131785848
+score_workflow,REVIEW,Strong anomaly stack requires analyst review,262,22,0.08396946564885496
+score_workflow,REVIEW,High-value off-hours pattern requires review,456,3,0.006578947368421052
+score_workflow,REJECT,Severe anomaly stack pushed score above reject threshold,610,203,0.33278688524590166
+score_workflow,REJECT,Extreme behavior spike pushed score above reject threshold,1902,84,0.04416403785488959
+score_workflow,REJECT,Risk score exceeded reject threshold,6,2,0.3333333333333333

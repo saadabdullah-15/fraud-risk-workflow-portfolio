@@ -1,0 +1,30 @@
+Fraud Risk Workflow Metrics
+===========================
+
+Dataset overview
+- Transactions: 284,807
+- Fraud transactions: 492
+- Fraud rate: 0.1727%
+- Median amount: 22.00
+- 90th percentile amount: 203.00
+- 99th percentile amount: 1017.97
+- Time span covered: 2.00 days
+- Missing values: 0
+
+Rule-based workflow
+- Approve count: 278,338
+- Review count: 5,791
+- Reject count: 678
+- Review rate: 2.03%
+- Reject rate: 0.24%
+- Fraud capture rate: 72.56%
+- Frauds captured in review/reject: 357
+
+Score-based workflow
+- Approve count: 276,229
+- Review count: 6,060
+- Reject count: 2,518
+- Review rate: 2.13%
+- Reject rate: 0.88%
+- Fraud capture rate: 79.27%
+- Frauds captured in review/reject: 390
