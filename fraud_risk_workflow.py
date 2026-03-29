@@ -13,6 +13,35 @@ OUTPUT_DIR = ROOT_DIR / "outputs"
 DECISION_ORDER = {"APPROVE": 0, "REVIEW": 1, "REJECT": 2}
 SAMPLE_ROWS_PER_DECISION = 20
 
+SECONDS_PER_DAY = 86_400
+SECONDS_PER_HOUR = 3_600
+
+MICRO_AMOUNT_THRESHOLD = 25
+ELEVATED_AMOUNT_THRESHOLD = 100
+HIGH_AMOUNT_THRESHOLD = 500
+VERY_HIGH_AMOUNT_THRESHOLD = 1_000
+
+RULE_REJECT_OUTLIER_COUNT = 13
+RULE_REJECT_EXTREME_OUTLIER_COUNT = 10
+RULE_REVIEW_OUTLIER_COUNT = 8
+RULE_REVIEW_CONCENTRATED_OUTLIER_COUNT = 7
+RULE_REVIEW_CONCENTRATED_SEVERE_COUNT = 4
+RULE_REVIEW_OFF_HOURS_OUTLIER_COUNT = 5
+RULE_REVIEW_AMOUNT_OUTLIER_COUNT = 4
+
+OUTLIER_FLAG_THRESHOLD = 3
+SEVERE_OUTLIER_FLAG_THRESHOLD = 5
+EXTREME_BEHAVIOR_THRESHOLD = 7
+
+SCORE_OUTLIER_HIGH_THRESHOLD = 10
+SCORE_OUTLIER_MEDIUM_THRESHOLD = 7
+SCORE_OUTLIER_LOW_THRESHOLD = 4
+SCORE_SEVERE_HIGH_THRESHOLD = 5
+SCORE_SEVERE_MEDIUM_THRESHOLD = 3
+SCORE_SEVERE_LOW_THRESHOLD = 1
+SCORE_REVIEW_THRESHOLD = 16
+SCORE_REJECT_THRESHOLD = 50
+
 
 def load_dataset(path: Path) -> pd.DataFrame:
     """Load the credit card dataset and validate the expected fields."""
@@ -35,53 +64,87 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     v_columns = [column for column in working_df.columns if column.startswith("V")]
     absolute_v = working_df[v_columns].abs()
 
-    working_df["hour_of_day"] = ((working_df["Time"] % 86_400) // 3_600).astype(int)
-    working_df["day_index"] = (working_df["Time"] // 86_400).astype(int)
+    working_df["hour_of_day"] = ((working_df["Time"] % SECONDS_PER_DAY) // SECONDS_PER_HOUR).astype(int)
+    working_df["day_index"] = (working_df["Time"] // SECONDS_PER_DAY).astype(int)
     working_df["is_off_hours"] = working_df["hour_of_day"].isin([0, 1, 2, 3, 4, 5]).astype(int)
     working_df["amount_log"] = np.log1p(working_df["Amount"])
     working_df["amount_bucket"] = pd.cut(
         working_df["Amount"],
-        bins=[-0.01, 25, 100, 500, 1_000, np.inf],
+        bins=[-0.01, MICRO_AMOUNT_THRESHOLD, ELEVATED_AMOUNT_THRESHOLD, HIGH_AMOUNT_THRESHOLD, VERY_HIGH_AMOUNT_THRESHOLD, np.inf],
         labels=["micro", "low", "medium", "high", "very_high"],
         include_lowest=True,
     )
-    working_df["high_amount_flag"] = (working_df["Amount"] >= 500).astype(int)
-    working_df["very_high_amount_flag"] = (working_df["Amount"] >= 1_000).astype(int)
+    working_df["high_amount_flag"] = (working_df["Amount"] >= HIGH_AMOUNT_THRESHOLD).astype(int)
+    working_df["very_high_amount_flag"] = (working_df["Amount"] >= VERY_HIGH_AMOUNT_THRESHOLD).astype(int)
 
     # The original V-columns are anonymized. We keep them usable by summarizing how
     # many of those inputs look unusually extreme, which is easier to explain.
-    working_df["behavioral_outlier_count"] = (absolute_v > 3).sum(axis=1)
-    working_df["severe_outlier_count"] = (absolute_v > 5).sum(axis=1)
+    working_df["behavioral_outlier_count"] = (absolute_v > OUTLIER_FLAG_THRESHOLD).sum(axis=1)
+    working_df["severe_outlier_count"] = (absolute_v > SEVERE_OUTLIER_FLAG_THRESHOLD).sum(axis=1)
     working_df["behavioral_peak_abs"] = absolute_v.max(axis=1)
-    working_df["extreme_behavior_flag"] = (absolute_v > 7).any(axis=1).astype(int)
+    working_df["extreme_behavior_flag"] = (absolute_v > EXTREME_BEHAVIOR_THRESHOLD).any(axis=1).astype(int)
 
     return working_df
 
 
 def assign_rule_decision(row: object) -> tuple[str, str]:
     """Apply a transparent, hierarchical rule workflow."""
-    if row.behavioral_outlier_count >= 13:
+    if row.behavioral_outlier_count >= RULE_REJECT_OUTLIER_COUNT:
         return "REJECT", "Very high anomaly intensity"
 
-    if row.extreme_behavior_flag and row.behavioral_outlier_count >= 10:
+    if row.extreme_behavior_flag and row.behavioral_outlier_count >= RULE_REJECT_EXTREME_OUTLIER_COUNT:
         return "REJECT", "Extreme anomaly stack with multiple severe signals"
 
-    if row.behavioral_outlier_count >= 8:
+    # Hierarchical policy: reject first, then increasingly broader review checks.
+    concentrated_anomaly_flag = (
+        row.behavioral_outlier_count >= RULE_REVIEW_CONCENTRATED_OUTLIER_COUNT
+        and row.severe_outlier_count >= RULE_REVIEW_CONCENTRATED_SEVERE_COUNT
+        and row.Amount >= HIGH_AMOUNT_THRESHOLD
+    )
+    off_hours_anomaly_flag = (
+        row.behavioral_outlier_count >= RULE_REVIEW_OFF_HOURS_OUTLIER_COUNT and row.is_off_hours
+    )
+    moderate_amount_anomaly_flag = (
+        row.behavioral_outlier_count >= RULE_REVIEW_AMOUNT_OUTLIER_COUNT
+        and row.Amount >= ELEVATED_AMOUNT_THRESHOLD
+    )
+    high_value_off_hours_flag = row.Amount >= HIGH_AMOUNT_THRESHOLD and row.is_off_hours
+
+    if (
+        concentrated_anomaly_flag
+        and row.behavioral_outlier_count < RULE_REVIEW_OUTLIER_COUNT
+        and not row.extreme_behavior_flag
+    ):
+        return "REVIEW", "High-value transaction with concentrated anomaly signals"
+
+    if (
+        off_hours_anomaly_flag
+        and row.behavioral_outlier_count < RULE_REVIEW_OUTLIER_COUNT
+        and not row.extreme_behavior_flag
+        and not concentrated_anomaly_flag
+    ):
+        return "REVIEW", "Off-hours transaction with elevated anomaly pattern"
+
+    if (
+        moderate_amount_anomaly_flag
+        and row.behavioral_outlier_count < RULE_REVIEW_OUTLIER_COUNT
+        and not row.extreme_behavior_flag
+        and not concentrated_anomaly_flag
+        and not off_hours_anomaly_flag
+    ):
+        return "REVIEW", "Elevated amount paired with moderate anomaly pattern"
+
+    if row.behavioral_outlier_count >= RULE_REVIEW_OUTLIER_COUNT:
         return "REVIEW", "Strong anomaly pattern requires analyst review"
 
     if row.extreme_behavior_flag:
         return "REVIEW", "Extreme feature movement requires analyst review"
 
-    if row.behavioral_outlier_count >= 7 and row.severe_outlier_count >= 4 and row.Amount >= 500:
-        return "REVIEW", "High-value transaction with concentrated anomaly signals"
-
-    if row.behavioral_outlier_count >= 5 and row.is_off_hours:
-        return "REVIEW", "Off-hours transaction with elevated anomaly pattern"
-
-    if row.behavioral_outlier_count >= 4 and row.Amount >= 100:
-        return "REVIEW", "Elevated amount paired with moderate anomaly pattern"
-
-    if row.Amount >= 500 and row.is_off_hours:
+    if (
+        high_value_off_hours_flag
+        and not row.extreme_behavior_flag
+        and row.behavioral_outlier_count < RULE_REVIEW_AMOUNT_OUTLIER_COUNT
+    ):
         return "REVIEW", "High-value off-hours transaction"
 
     return "APPROVE", "No material risk flags under current policy"
@@ -106,20 +169,21 @@ def apply_rule_workflow(df: pd.DataFrame) -> pd.DataFrame:
 def build_score_components(df: pd.DataFrame) -> pd.DataFrame:
     """Calculate additive score components for a lightweight screening score."""
     components = pd.DataFrame(index=df.index)
+    # Score thresholds are manually calibrated for an interpretable prototype.
     components["score_behavioral_outlier_points"] = np.select(
         [
-            df["behavioral_outlier_count"] >= 10,
-            df["behavioral_outlier_count"] >= 7,
-            df["behavioral_outlier_count"] >= 4,
+            df["behavioral_outlier_count"] >= SCORE_OUTLIER_HIGH_THRESHOLD,
+            df["behavioral_outlier_count"] >= SCORE_OUTLIER_MEDIUM_THRESHOLD,
+            df["behavioral_outlier_count"] >= SCORE_OUTLIER_LOW_THRESHOLD,
         ],
         [35, 25, 12],
         default=0,
     )
     components["score_severe_outlier_points"] = np.select(
         [
-            df["severe_outlier_count"] >= 5,
-            df["severe_outlier_count"] >= 3,
-            df["severe_outlier_count"] >= 1,
+            df["severe_outlier_count"] >= SCORE_SEVERE_HIGH_THRESHOLD,
+            df["severe_outlier_count"] >= SCORE_SEVERE_MEDIUM_THRESHOLD,
+            df["severe_outlier_count"] >= SCORE_SEVERE_LOW_THRESHOLD,
         ],
         [20, 12, 5],
         default=0,
@@ -127,12 +191,16 @@ def build_score_components(df: pd.DataFrame) -> pd.DataFrame:
     components["score_extreme_behavior_points"] = np.where(df["extreme_behavior_flag"] == 1, 18, 0)
     components["score_off_hours_points"] = np.where(df["is_off_hours"] == 1, 8, 0)
     components["score_amount_points"] = np.select(
-        [df["Amount"] >= 1_000, df["Amount"] >= 500, df["Amount"] >= 100],
+        [
+            df["Amount"] >= VERY_HIGH_AMOUNT_THRESHOLD,
+            df["Amount"] >= HIGH_AMOUNT_THRESHOLD,
+            df["Amount"] >= ELEVATED_AMOUNT_THRESHOLD,
+        ],
         [12, 8, 4],
         default=0,
     )
     components["score_high_amount_off_hours_points"] = np.where(
-        (df["Amount"] >= 500) & (df["is_off_hours"] == 1),
+        (df["Amount"] >= HIGH_AMOUNT_THRESHOLD) & (df["is_off_hours"] == 1),
         6,
         0,
     )
@@ -143,9 +211,9 @@ def build_score_components(df: pd.DataFrame) -> pd.DataFrame:
 
 def determine_score_decision(score: int) -> str:
     """Map the total score to an operational action."""
-    if score >= 50:
+    if score >= SCORE_REJECT_THRESHOLD:
         return "REJECT"
-    if score >= 16:
+    if score >= SCORE_REVIEW_THRESHOLD:
         return "REVIEW"
     return "APPROVE"
 
@@ -156,18 +224,18 @@ def build_score_reason(row: object) -> tuple[str, str]:
     contributor_labels: list[tuple[int, str]] = []
 
     if row.score_behavioral_outlier_points > 0:
-        if row.behavioral_outlier_count >= 10:
+        if row.behavioral_outlier_count >= SCORE_OUTLIER_HIGH_THRESHOLD:
             label = "very high anomaly count"
-        elif row.behavioral_outlier_count >= 7:
+        elif row.behavioral_outlier_count >= SCORE_OUTLIER_MEDIUM_THRESHOLD:
             label = "strong anomaly count"
         else:
             label = "moderate anomaly count"
         contributor_labels.append((int(row.score_behavioral_outlier_points), label))
 
     if row.score_severe_outlier_points > 0:
-        if row.severe_outlier_count >= 5:
+        if row.severe_outlier_count >= SCORE_SEVERE_HIGH_THRESHOLD:
             label = "multiple severe anomalies"
-        elif row.severe_outlier_count >= 3:
+        elif row.severe_outlier_count >= SCORE_SEVERE_MEDIUM_THRESHOLD:
             label = "cluster of severe anomalies"
         else:
             label = "single severe anomaly"
@@ -177,9 +245,9 @@ def build_score_reason(row: object) -> tuple[str, str]:
         contributor_labels.append((int(row.score_extreme_behavior_points), "extreme feature spike"))
 
     if row.score_amount_points > 0:
-        if row.Amount >= 1_000:
+        if row.Amount >= VERY_HIGH_AMOUNT_THRESHOLD:
             label = "very high transaction amount"
-        elif row.Amount >= 500:
+        elif row.Amount >= HIGH_AMOUNT_THRESHOLD:
             label = "high transaction amount"
         else:
             label = "elevated transaction amount"
@@ -197,16 +265,19 @@ def build_score_reason(row: object) -> tuple[str, str]:
     detail = ", ".join(label for _, label in contributor_labels[:3])
 
     if decision == "REJECT":
-        if row.behavioral_outlier_count >= 10 and row.severe_outlier_count >= 5:
+        if (
+            row.behavioral_outlier_count >= SCORE_OUTLIER_HIGH_THRESHOLD
+            and row.severe_outlier_count >= SCORE_SEVERE_HIGH_THRESHOLD
+        ):
             primary_reason = "Severe anomaly stack pushed score above reject threshold"
         elif row.extreme_behavior_flag == 1:
             primary_reason = "Extreme behavior spike pushed score above reject threshold"
         else:
             primary_reason = "Risk score exceeded reject threshold"
     elif decision == "REVIEW":
-        if row.behavioral_outlier_count >= 7:
+        if row.behavioral_outlier_count >= SCORE_OUTLIER_MEDIUM_THRESHOLD:
             primary_reason = "Strong anomaly stack requires analyst review"
-        elif row.Amount >= 500 and row.is_off_hours == 1:
+        elif row.Amount >= HIGH_AMOUNT_THRESHOLD and row.is_off_hours == 1:
             primary_reason = "High-value off-hours pattern requires review"
         else:
             primary_reason = "Risk score crossed review threshold"
@@ -393,7 +464,7 @@ def build_dataset_overview(df: pd.DataFrame) -> dict[str, float]:
         "amount_median": float(df["Amount"].median()),
         "amount_p90": float(df["Amount"].quantile(0.90)),
         "amount_p99": float(df["Amount"].quantile(0.99)),
-        "time_span_days": float(df["Time"].max() / 86_400),
+        "time_span_days": float(df["Time"].max() / SECONDS_PER_DAY),
         "missing_values": int(df.isna().sum().sum()),
     }
     return overview

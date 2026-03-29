@@ -2,7 +2,7 @@
 
 This project builds a simplified transaction screening workflow using the anonymized `creditcard.csv` dataset. The focus is not on training a machine learning model, but on designing and evaluating interpretable decision workflows for fraud prevention in a fintech context.
 
-The project demonstrates how transaction data can be translated into approve / review / reject decisions, with clear reasoning and measurable operational trade-offs.
+The project demonstrates how transaction data can be translated into `APPROVE` / `REVIEW` / `REJECT` decisions, with clear reasoning and measurable operational trade-offs.
 
 ## Objective
 
@@ -132,21 +132,21 @@ Place `creditcard.csv` in the root directory and run:
 python fraud_risk_workflow.py
 ```
 
+The raw dataset is kept out of GitHub because the source file is too large for a standard repository commit.
+
 ## Project Structure
 
 - `fraud_risk_workflow.py` — main workflow and analysis script
 - `outputs/` — generated summaries and samples
 - `README.md` — project documentation
+- `creditcard.csv` — local input dataset, not committed to GitHub
 
 ## Assumptions and Limitations
 
 - Fraud labels are used only for evaluation
 - Dataset is anonymized -> workflow is a policy prototype, not production-ready
 - Thresholds are chosen for interpretability, not optimization
-- Real systems would include additional features:
-- customer history
-- merchant data
-- device and channel signals
+- Real systems would include additional features such as customer history, merchant data, and device/channel signals
 
 ## Relevance for FinTech / Risk Roles
 
@@ -165,7 +165,7 @@ It reflects the type of work done in roles combining:
 
 ## CV-Ready Project Summary
 
-- Built a Python-based fraud screening workflow on 284k+ transactions, designing both rule-based and score-based decision systems with approve/review/reject outcomes
+- Built a Python-based fraud screening workflow on 284k+ transactions, designing both rule-based and score-based decision systems with `APPROVE` / `REVIEW` / `REJECT` outcomes
 - Engineered interpretable transaction and behavioral risk signals and implemented explainable decision logic with reason tracking
 - Evaluated workflow performance using review rate and fraud capture rate; improved fraud capture from 72.6% to 79.3% with minimal increase in review volume
 
