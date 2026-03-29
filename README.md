@@ -213,7 +213,23 @@ Start the local server:
 python fraud_decision_api.py
 ```
 
-Example request:
+Open `http://127.0.0.1:5000` in a browser only if you want to confirm the server is running. The app exposes `POST /decision` only, so `GET /` will return `404` by design.
+
+Example request with PowerShell:
+
+```powershell
+$body = @{
+  Amount = 650
+  hour_of_day = 2
+  behavioral_outlier_count = 8
+  severe_outlier_count = 3
+  extreme_behavior_flag = 0
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/decision" -ContentType "application/json" -Body $body
+```
+
+Example request with curl:
 
 ```bash
 curl -X POST http://127.0.0.1:5000/decision \
