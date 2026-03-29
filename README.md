@@ -168,3 +168,13 @@ It reflects the type of work done in roles combining:
 - Built a Python-based fraud screening workflow on 284k+ transactions, designing both rule-based and score-based decision systems with approve/review/reject outcomes
 - Engineered interpretable transaction and behavioral risk signals and implemented explainable decision logic with reason tracking
 - Evaluated workflow performance using review rate and fraud capture rate; improved fraud capture from 72.6% to 79.3% with minimal increase in review volume
+
+## Next Steps
+
+A realistic extension would be to layer a supervised model on top of this policy baseline and compare:
+
+- rule-based workflow
+- score-based workflow
+- model-assisted decisioning
+
+This reflects how modern risk systems evolve in practice.
