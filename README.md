@@ -1,50 +1,44 @@
-# Fraud Risk Decision Workflow (FinTech Case Study)
+# Fraud Risk Decision Workflow
 
-This project builds a simplified transaction screening workflow using the anonymized `creditcard.csv` dataset. The focus is not on training a machine learning model, but on designing and evaluating interpretable decision workflows for fraud prevention in a fintech context.
+This repository is a small fintech-style fraud screening project built around interpretable decision logic rather than machine learning. It takes anonymized transaction data, engineers readable risk signals, and assigns operational decisions of `APPROVE`, `REVIEW`, or `REJECT`.
 
-The project demonstrates how transaction data can be translated into `APPROVE` / `REVIEW` / `REJECT` decisions, with clear reasoning and measurable operational trade-offs.
+The project has two parts:
 
-## Objective
+- an offline workflow analysis in `fraud_risk_workflow.py`
+- a local Flask API prototype in `fraud_decision_api.py`
 
-Design and evaluate two fraud-screening workflows that classify transactions into:
+The goal is to show how raw transaction data can be turned into explainable risk decisions with measurable trade-offs.
 
-- `APPROVE`
-- `REVIEW`
-- `REJECT`
+## What The Project Does
 
-Key constraints:
+The workflow evaluates transactions using two decision approaches:
 
-- Maintain fully interpretable logic
-- Avoid machine learning in the decision process
-- Use fraud labels (`Class`) only for offline evaluation
+- `Rule-based workflow` for direct, hierarchical policy logic
+- `Score-based workflow` for additive risk scoring with threshold-based actions
 
-## Business Context
+Both workflows are designed to stay easy to explain in an interview or portfolio review:
 
-In real-world payment systems, fraud prevention is not only about detection accuracy. It requires balancing:
+- business-readable features
+- explicit thresholds
+- clear decision reasons
+- simple performance summaries
 
-- fraud capture
-- manual review capacity
-- customer experience (false declines)
-- explainability of decisions
+## Dataset
 
-This project reflects that trade-off by comparing:
-
-- Rule-based decision workflow
-- Risk-scoring workflow
-
-`REVIEW` represents transactions routed to manual investigation.  
-`REJECT` represents a hard-stop decision (in practice, often replaced by step-up authentication).
-
-## Dataset and Feature Design
+The analysis uses the anonymized `creditcard.csv` dataset.
 
 - `284,807` transactions
-- `492` fraud cases (`0.17%`)
-- No missing values
-- `~2` days of activity
+- `492` fraud cases
+- fraud rate of `0.1727%`
+- approximately `2` days of transaction activity
 
-To keep the workflow interpretable, features are engineered from:
+The dataset is used for offline workflow evaluation only. Fraud labels are not used to make decisions inside the workflow itself.
 
-### Transaction attributes
+## Feature Engineering
+
+To avoid relying directly on anonymized PCA variables (`V1` to `V28`), the project converts them into compact behavioral signals that are easier to interpret.
+
+### Transaction Features
 
 - `hour_of_day`
 - `day_index`
@@ -54,127 +48,199 @@ To keep the workflow interpretable, features are engineered from:
 - `high_amount_flag`
 - `very_high_amount_flag`
 
-### Behavioral anomaly signals (derived from PCA features)
-
-Instead of using raw anonymized variables (`V1-V28`), they are aggregated into:
+### Behavioral Risk Signals
 
 - `behavioral_outlier_count`
 - `severe_outlier_count`
 - `behavioral_peak_abs`
 - `extreme_behavior_flag`
 
-This keeps the workflow closer to how real systems combine business signals + upstream risk indicators.
+This mirrors a realistic fraud workflow pattern where upstream model or anomaly signals are summarized into decision-friendly inputs.
 
-## Workflow Design
+## Decision Design
 
-### 1. Rule-Based Workflow
+### Rule-Based Workflow
 
-A hierarchical policy assigns decisions based on clear conditions:
+The rule workflow applies transparent checks in order of severity.
 
-- `REJECT` -> extreme anomaly signals or strong stacked risk indicators
-- `REVIEW` -> moderate anomaly patterns, off-hours risk, or elevated transaction values
-- `APPROVE` -> no significant risk signals
+- `REJECT` for very strong anomaly stacks
+- `REVIEW` for meaningful but less extreme patterns
+- `APPROVE` when no material risk flags are present
 
-Each decision includes an explicit reason, e.g.:
+Example rule-style reasons:
 
 - `Very high anomaly intensity`
 - `Strong anomaly pattern requires analyst review`
-- `Elevated amount with moderate anomaly pattern`
+- `High-value off-hours transaction`
 
-### 2. Risk-Scoring Workflow
+### Score-Based Workflow
 
-A simple additive scoring system assigns points based on:
+The score workflow assigns additive points based on:
 
 - anomaly intensity
 - severe anomaly concentration
-- extreme behavioral spikes
-- off-hours activity
+- extreme behavior spikes
+- off-hours timing
 - transaction amount
 - high-value off-hours combinations
 
-Scores are mapped to:
+The final score maps to:
 
-- low -> `APPROVE`
-- medium -> `REVIEW`
-- high -> `REJECT`
+- `APPROVE` when score is below `16`
+- `REVIEW` when score is `16` to `49`
+- `REJECT` when score is `50+`
 
-This approach increases flexibility while maintaining interpretability.
+Each score-based decision also returns:
+
+- `decision_reason`
+- `reason_detail`
 
 ## Results
-
-### Key Metrics
 
 | Workflow | Review Rate | Reject Rate | Fraud Capture Rate | Frauds Captured |
 | --- | ---: | ---: | ---: | ---: |
 | Rule-based | 2.03% | 0.24% | 72.56% | 357 / 492 |
 | Score-based | 2.13% | 0.88% | 79.27% | 390 / 492 |
 
-### Interpretation
+### Takeaway
 
-- The rule-based workflow is simpler and easier to audit.
-- The score-based workflow improves fraud capture with minimal increase in review load.
-- Both approaches demonstrate a realistic trade-off between risk control and operational efficiency.
+- The rule workflow is simpler to audit and explain.
+- The score workflow captures more fraud while keeping review volume relatively close.
+- The project demonstrates the operational trade-off between fraud control, review workload, and customer friction.
 
 ## Outputs
 
-Running the script generates:
+Running the workflow script writes files to `outputs/`:
 
-- `decision_bucket_summary.csv` -> distribution and fraud rates by decision
-- `decision_reason_summary.csv` -> breakdown by decision reason
-- `workflow_sample.csv` -> sample transactions with decisions and explanations
-- `project_metrics.txt` -> compact performance metrics
+- `decision_bucket_summary.csv` for decision distribution and fraud rate by bucket
+- `decision_reason_summary.csv` for reason-level breakdowns
+- `workflow_sample.csv` for example transactions with decisions and explanations
+- `project_metrics.txt` for compact headline metrics
 
-## How to Run
+## Project Structure
 
-Place `creditcard.csv` in the root directory and run:
+- `fraud_risk_workflow.py` - main offline workflow and output generation
+- `fraud_decision_api.py` - local Flask API for single-transaction score decisions
+- `outputs/` - generated summaries and samples
+- `README.md` - project documentation
+- `creditcard.csv` - local dataset file, not committed to GitHub
+
+## Local Setup
+
+Use Python 3.10+ and install the required packages:
+
+```bash
+pip install pandas numpy flask
+```
+
+## Run The Workflow Analysis
+
+Place `creditcard.csv` in the repository root, then run:
 
 ```bash
 python fraud_risk_workflow.py
 ```
 
-The raw dataset is kept out of GitHub because the source file is too large for a standard repository commit.
+This generates the summary files in `outputs/`.
 
-## Project Structure
+## API Extension
 
-- `fraud_risk_workflow.py` — main workflow and analysis script
-- `outputs/` — generated summaries and samples
-- `README.md` — project documentation
-- `creditcard.csv` — local input dataset, not committed to GitHub
+`fraud_decision_api.py` exposes a simple local API that simulates a fraud decision service for one transaction-like request at a time.
 
-## Assumptions and Limitations
+### Endpoint
 
-- Fraud labels are used only for evaluation
-- Dataset is anonymized -> workflow is a policy prototype, not production-ready
-- Thresholds are chosen for interpretability, not optimization
-- Real systems would include additional features such as customer history, merchant data, and device/channel signals
+`POST /decision`
 
-## Relevance for FinTech / Risk Roles
+### Request Fields
+
+- `Amount`
+- `hour_of_day`
+- `behavioral_outlier_count`
+- `severe_outlier_count`
+- `extreme_behavior_flag`
+
+The API derives `is_off_hours` internally from `hour_of_day`, reconstructs the score inputs, and returns the same score-based decision logic used in the main workflow.
+
+The API does not load the full dataset for requests.
+
+### Validation
+
+The API returns `400` errors for:
+
+- missing fields
+- invalid numeric types
+- `hour_of_day` outside `0` to `23`
+- negative values for `Amount`
+- negative values for `behavioral_outlier_count`
+- negative values for `severe_outlier_count`
+
+### Example Request
+
+```json
+{
+  "Amount": 875.5,
+  "hour_of_day": 2,
+  "behavioral_outlier_count": 8,
+  "severe_outlier_count": 3,
+  "extreme_behavior_flag": 1
+}
+```
+
+### Example Response
+
+```json
+{
+  "decision": "REJECT",
+  "risk_score": 77,
+  "decision_reason": "Extreme behavior spike pushed score above reject threshold",
+  "reason_detail": "strong anomaly count, extreme feature spike, cluster of severe anomalies",
+  "input_echo": {
+    "Amount": 875.5,
+    "hour_of_day": 2,
+    "behavioral_outlier_count": 8,
+    "severe_outlier_count": 3,
+    "extreme_behavior_flag": 1,
+    "is_off_hours": 1
+  }
+}
+```
+
+### Run The API
+
+Start the local server:
+
+```bash
+python fraud_decision_api.py
+```
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:5000/decision \
+  -H "Content-Type: application/json" \
+  -d "{\"Amount\":875.5,\"hour_of_day\":2,\"behavioral_outlier_count\":8,\"severe_outlier_count\":3,\"extreme_behavior_flag\":1}"
+```
+
+## Why This Is Useful For A Portfolio
 
 This project demonstrates:
 
-- translating data into decision workflows
-- designing explainable risk logic
-- evaluating review vs fraud trade-offs
-- structuring outputs for operational use
+- translating raw transaction data into risk decisions
+- building explainable fraud logic without black-box modeling
+- comparing policy-based and score-based decisioning
+- summarizing outcomes with operational metrics
+- exposing scoring logic through a minimal local API
 
-It reflects the type of work done in roles combining:
+## Assumptions And Limitations
 
-- business analysis
-- risk/fraud analytics
-- workflow development
+- The dataset is anonymized, so the workflow is a policy prototype rather than a production fraud system.
+- Thresholds are hand-tuned for interpretability, not globally optimized.
+- The API is a local prototype only and does not include authentication, persistence, or deployment setup.
+- Real fraud systems would also use customer history, merchant features, device signals, and feedback loops.
 
-## CV-Ready Project Summary
+## CV-Ready Summary
 
-- Built a Python-based fraud screening workflow on 284k+ transactions, designing both rule-based and score-based decision systems with `APPROVE` / `REVIEW` / `REJECT` outcomes
-- Engineered interpretable transaction and behavioral risk signals and implemented explainable decision logic with reason tracking
-- Evaluated workflow performance using review rate and fraud capture rate; improved fraud capture from 72.6% to 79.3% with minimal increase in review volume
-
-## Next Steps
-
-A realistic extension would be to layer a supervised model on top of this policy baseline and compare:
-
-- rule-based workflow
-- score-based workflow
-- model-assisted decisioning
-
-This reflects how modern risk systems evolve in practice.
+- Built a Python fraud screening workflow on `284k+` transactions with interpretable `APPROVE` / `REVIEW` / `REJECT` decisions
+- Engineered business-readable transaction and anomaly signals from anonymized data
+- Compared rule-based and score-based decision strategies and measured fraud capture versus operational review load
+- Extended the workflow with a lightweight Flask API for single-transaction scoring
