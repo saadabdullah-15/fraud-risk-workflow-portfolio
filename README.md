@@ -2,8 +2,6 @@
 
 This project turns the anonymized `creditcard.csv` dataset into a small fintech operations case study. The goal is not to train a model yet. The goal is to show how a student can structure a fraud-screening workflow, define review and reject rules, measure operational tradeoffs, and communicate the outcome in a business-ready way.
 
-It is designed as a portfolio project for a Working Student role focused on Technical Business Analytics and Workflow Development in fintech.
-
 ## Project Objective
 
 Build two simple transaction-screening workflows that classify each transaction into:
