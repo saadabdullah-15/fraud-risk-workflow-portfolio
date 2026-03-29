@@ -1,38 +1,50 @@
-# Fraud Risk Workflow Portfolio Project
+# Fraud Risk Decision Workflow (FinTech Case Study)
 
-This project turns the anonymized `creditcard.csv` dataset into a small fintech operations case study. The goal is not to train a model yet. The goal is to show how a student can structure a fraud-screening workflow, define review and reject rules, measure operational tradeoffs, and communicate the outcome in a business-ready way.
+This project builds a simplified transaction screening workflow using the anonymized `creditcard.csv` dataset. The focus is not on training a machine learning model, but on designing and evaluating interpretable decision workflows for fraud prevention in a fintech context.
 
-## Project Objective
+The project demonstrates how transaction data can be translated into approve / review / reject decisions, with clear reasoning and measurable operational trade-offs.
 
-Build two simple transaction-screening workflows that classify each transaction into:
+## Objective
+
+Design and evaluate two fraud-screening workflows that classify transactions into:
 
 - `APPROVE`
 - `REVIEW`
 - `REJECT`
 
-The workflows must stay interpretable, avoid machine learning, and use the fraud label only for offline evaluation.
+Key constraints:
 
-## Business Framing
+- Maintain fully interpretable logic
+- Avoid machine learning in the decision process
+- Use fraud labels (`Class`) only for offline evaluation
 
-In a real fintech risk workflow, fraud controls are not only about detection quality. They are also about:
+## Business Context
 
-- keeping manual review queues manageable
-- reducing unnecessary false declines
-- escalating only the riskiest transactions
-- documenting why a transaction was approved, reviewed, or rejected
+In real-world payment systems, fraud prevention is not only about detection accuracy. It requires balancing:
 
-This project reflects that logic by comparing:
+- fraud capture
+- manual review capacity
+- customer experience (false declines)
+- explainability of decisions
 
-1. a rule-based decision workflow
-2. a simple additive risk-scoring workflow
+This project reflects that trade-off by comparing:
 
-`REVIEW` represents a manual fraud screening queue. `REJECT` represents a hard-stop recommendation in this demo. In production, some firms would replace part of that reject bucket with step-up authentication or another customer verification step.
+- Rule-based decision workflow
+- Risk-scoring workflow
 
-## Data and Feature Design
+`REVIEW` represents transactions routed to manual investigation.  
+`REJECT` represents a hard-stop decision (in practice, often replaced by step-up authentication).
 
-The dataset contains `284,807` transactions, of which `492` are labeled as fraud (`0.1727%` fraud rate). It spans roughly `2` days and has no missing values.
+## Dataset and Feature Design
 
-To keep the workflow interpretable, the script engineers readable features from `Time` and `Amount`:
+- `284,807` transactions
+- `492` fraud cases (`0.17%`)
+- No missing values
+- `~2` days of activity
+
+To keep the workflow interpretable, features are engineered from:
+
+### Transaction attributes
 
 - `hour_of_day`
 - `day_index`
@@ -42,123 +54,117 @@ To keep the workflow interpretable, the script engineers readable features from 
 - `high_amount_flag`
 - `very_high_amount_flag`
 
-Because the source dataset uses anonymized `V1` to `V28` variables, the script does not build opaque rules on individual PCA columns. Instead, it summarizes them into a few explainable anomaly indicators:
+### Behavioral anomaly signals (derived from PCA features)
+
+Instead of using raw anonymized variables (`V1-V28`), they are aggregated into:
 
 - `behavioral_outlier_count`
 - `severe_outlier_count`
 - `behavioral_peak_abs`
 - `extreme_behavior_flag`
 
-That keeps the workflow more realistic for a policy prototype: business-readable timing and amount signals, supported by a compact anomaly summary from upstream risk features.
+This keeps the workflow closer to how real systems combine business signals + upstream risk indicators.
 
-## Workflow Logic
+## Workflow Design
 
 ### 1. Rule-Based Workflow
 
-The rule-based workflow uses a clear hierarchy:
+A hierarchical policy assigns decisions based on clear conditions:
 
-- `REJECT` for very high anomaly intensity or stacked severe anomaly signals
-- `REVIEW` for strong anomaly patterns, off-hours risk, or elevated amount plus moderate anomaly evidence
-- `APPROVE` when no material policy flags are triggered
+- `REJECT` -> extreme anomaly signals or strong stacked risk indicators
+- `REVIEW` -> moderate anomaly patterns, off-hours risk, or elevated transaction values
+- `APPROVE` -> no significant risk signals
 
-Each transaction receives a decision reason such as:
+Each decision includes an explicit reason, e.g.:
 
 - `Very high anomaly intensity`
 - `Strong anomaly pattern requires analyst review`
-- `Elevated amount paired with moderate anomaly pattern`
+- `Elevated amount with moderate anomaly pattern`
 
 ### 2. Risk-Scoring Workflow
 
-The scoring workflow assigns points to a small set of interpretable signals:
+A simple additive scoring system assigns points based on:
 
 - anomaly intensity
 - severe anomaly concentration
-- extreme behavior spikes
-- off-hours timing
-- elevated transaction amount
+- extreme behavioral spikes
+- off-hours activity
+- transaction amount
 - high-value off-hours combinations
 
-The final score is mapped to:
+Scores are mapped to:
 
-- `APPROVE` for low scores
-- `REVIEW` for medium scores
-- `REJECT` for high scores
+- low -> `APPROVE`
+- medium -> `REVIEW`
+- high -> `REJECT`
 
-This version is slightly more sensitive than the rule-based policy and captures more fraud, while still providing a primary decision reason and a short detail field.
+This approach increases flexibility while maintaining interpretability.
 
 ## Results
 
-### Headline Metrics
+### Key Metrics
 
 | Workflow | Review Rate | Reject Rate | Fraud Capture Rate | Frauds Captured |
 | --- | ---: | ---: | ---: | ---: |
-| Rule-based workflow | 2.03% | 0.24% | 72.56% | 357 / 492 |
-| Score-based workflow | 2.13% | 0.88% | 79.27% | 390 / 492 |
+| Rule-based | 2.03% | 0.24% | 72.56% | 357 / 492 |
+| Score-based | 2.13% | 0.88% | 79.27% | 390 / 492 |
 
 ### Interpretation
 
-- The rule-based workflow is more conservative on hard rejects and easier to explain line by line.
-- The score-based workflow captures more fraud with only a small increase in review load.
-- Both workflows reduce fraud exposure substantially compared with approving everything, while keeping the policy logic understandable.
+- The rule-based workflow is simpler and easier to audit.
+- The score-based workflow improves fraud capture with minimal increase in review load.
+- Both approaches demonstrate a realistic trade-off between risk control and operational efficiency.
 
-## Output Files
+## Outputs
 
-Running the script creates the following files in `outputs/`:
+Running the script generates:
 
-- `decision_bucket_summary.csv`
-- `decision_reason_summary.csv`
-- `workflow_sample.csv`
-- `project_metrics.txt`
+- `decision_bucket_summary.csv` -> distribution and fraud rates by decision
+- `decision_reason_summary.csv` -> breakdown by decision reason
+- `workflow_sample.csv` -> sample transactions with decisions and explanations
+- `project_metrics.txt` -> compact performance metrics
 
-These files are intended to be easy to reference in an application, interview, or CV discussion.
+## How to Run
 
-## How To Run
-
-Place `creditcard.csv` in the repository root before running the script. The dataset is kept out of Git because the raw file is too large for a standard GitHub commit.
+Place `creditcard.csv` in the root directory and run:
 
 ```bash
 python fraud_risk_workflow.py
 ```
 
-## Repository Structure
+## Project Structure
 
-- `fraud_risk_workflow.py`: main analysis and export script
-- `creditcard.csv`: raw input dataset kept locally, not committed to GitHub
-- `outputs/decision_bucket_summary.csv`: grouped summary by decision bucket
-- `outputs/decision_reason_summary.csv`: grouped summary by decision reason
-- `outputs/workflow_sample.csv`: recruiter-friendly sample output
-- `outputs/project_metrics.txt`: compact metrics snapshot
+- `fraud_risk_workflow.py` — main workflow and analysis script
+- `outputs/` — generated summaries and samples
+- `README.md` — project documentation
 
 ## Assumptions and Limitations
 
-- `Class` is used only for evaluation, never inside the decision rules.
-- The dataset is anonymized, so this is a workflow prototype rather than a production fraud policy.
-- Thresholds are chosen for clarity and operational credibility, not for maximum possible precision.
-- A production workflow would usually include customer, merchant, channel, and historical behavioral features that are not available here.
+- Fraud labels are used only for evaluation
+- Dataset is anonymized -> workflow is a policy prototype, not production-ready
+- Thresholds are chosen for interpretability, not optimization
+- Real systems would include additional features:
+- customer history
+- merchant data
+- device and channel signals
 
-## Why This Is Relevant For A Fintech Working Student Role
+## Relevance for FinTech / Risk Roles
 
-This project is positioned around workflow thinking, not just analysis:
+This project demonstrates:
 
-- translating raw transaction data into decision logic
-- documenting decision reasons for operations teams
-- measuring the tradeoff between manual review load and fraud capture
-- packaging outputs clearly for stakeholders
+- translating data into decision workflows
+- designing explainable risk logic
+- evaluating review vs fraud trade-offs
+- structuring outputs for operational use
 
-That aligns well with roles that sit between analytics, risk operations, and workflow development.
+It reflects the type of work done in roles combining:
 
-## CV-ready project summary
+- business analysis
+- risk/fraud analytics
+- workflow development
 
-- Built a Python-based fraud screening case study on `284k+` credit card transactions, designing both a rule-based workflow and a simple risk-scoring workflow with `APPROVE`, `REVIEW`, and `REJECT` outcomes.
-- Engineered interpretable transaction features from time and amount data, added decision-reason fields, and evaluated workflow performance using review rate and fraud capture rate rather than machine learning accuracy.
-- Delivered recruiter-friendly outputs including decision-bucket summaries, reason summaries, and sample screening results; the score-based workflow captured `79.27%` of fraud while keeping manual review to `2.13%` of transactions.
+## CV-Ready Project Summary
 
-## Suggested Next Step
-
-The natural next step is to keep this policy baseline and add a supervised model on top of it. That would allow comparison between:
-
-- pure policy rules
-- policy plus score
-- policy plus machine learning
-
-This sequencing is more realistic than jumping directly into a model without first defining an operational decision process.
+- Built a Python-based fraud screening workflow on 284k+ transactions, designing both rule-based and score-based decision systems with approve/review/reject outcomes
+- Engineered interpretable transaction and behavioral risk signals and implemented explainable decision logic with reason tracking
+- Evaluated workflow performance using review rate and fraud capture rate; improved fraud capture from 72.6% to 79.3% with minimal increase in review volume
